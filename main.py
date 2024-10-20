@@ -3,192 +3,246 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 from datetime import datetime
-
-def load_financial_data(file_path):
-    data = pd.read_csv(file_path)
-    return data
+from typing import List, Tuple, Optional
 
 
-def merge_sort(arr):
-    if len(arr) > 1:
-        mid = len(arr) // 2
-        left = arr[:mid]
-        right = arr[mid:]
+class DataLoader:
+    @staticmethod
+    def load_financial_data(file_path: str) -> pd.DataFrame:
+        """Load financial data from CSV file."""
+        return pd.read_csv(file_path)
 
-        merge_sort(left)
-        merge_sort(right)
 
-        i = j = k = 0
-        while i < len(left) and j < len(right):
-            if left[i] < right[j]:
+class Sorter:
+    @staticmethod
+    def merge_sort(arr: List[float]) -> None:
+        """Implement merge sort algorithm."""
+        if len(arr) > 1:
+            mid = len(arr) // 2
+            left = arr[:mid]
+            right = arr[mid:]
+
+            Sorter.merge_sort(left)
+            Sorter.merge_sort(right)
+
+            i = j = k = 0
+            while i < len(left) and j < len(right):
+                if left[i] < right[j]:
+                    arr[k] = left[i]
+                    i += 1
+                else:
+                    arr[k] = right[j]
+                    j += 1
+                k += 1
+
+            while i < len(left):
                 arr[k] = left[i]
                 i += 1
-            else:
+                k += 1
+
+            while j < len(right):
                 arr[k] = right[j]
                 j += 1
-            k += 1
-
-        while i < len(left):
-            arr[k] = left[i]
-            i += 1
-            k += 1
-
-        while j < len(right):
-            arr[k] = right[j]
-            j += 1
-            k += 1
+                k += 1
 
 
-def max_subarray(arr):
-    max_ending_here = max_so_far = arr[0]
-    start = end = s = 0
+class TrendAnalyzer:
+    @staticmethod
+    def max_subarray(arr: np.ndarray) -> Tuple[float, int, int]:
+        """Find maximum subarray sum and its indices."""
+        max_ending_here = max_so_far = arr[0]
+        start = end = s = 0
 
-    for i in range(1, len(arr)):
-        if arr[i] > max_ending_here + arr[i]:
-            max_ending_here = arr[i]
-            s = i
-        else:
-            max_ending_here += arr[i]
+        for i in range(1, len(arr)):
+            if arr[i] > max_ending_here + arr[i]:
+                max_ending_here = arr[i]
+                s = i
+            else:
+                max_ending_here += arr[i]
 
-        if max_ending_here > max_so_far:
-            max_so_far = max_ending_here
-            start = s
-            end = i
+            if max_ending_here > max_so_far:
+                max_so_far = max_ending_here
+                start = s
+                end = i
 
-    return max_so_far, start, end
-
-
-def date_to_numeric(date_str):
-    """Convert date string to ordinal number."""
-    return datetime.strptime(date_str, '%Y-%m-%d').toordinal()
+        return max_so_far, start, end
 
 
-def euclidean_distance(p1, p2):
-    # Scale the distance calculation to handle the different magnitudes
-    # between dates and prices
-    date_scale = 1 / 365  # Scale dates to roughly handle year differences
-    return math.sqrt(((p1[0] - p2[0]) * date_scale) ** 2 + ((p1[1] - p2[1])) ** 2)
+class AnomalyDetector:
+    @staticmethod
+    def date_to_numeric(date_str: str) -> int:
+        """Convert date string to ordinal number."""
+        return datetime.strptime(date_str, '%Y-%m-%d').toordinal()
+
+    @staticmethod
+    def euclidean_distance(p1: Tuple[int, float], p2: Tuple[int, float]) -> float:
+        """Calculate scaled Euclidean distance between two points."""
+        date_scale = 1 / 365
+        return math.sqrt(((p1[0] - p2[0]) * date_scale) ** 2 + ((p1[1] - p2[1])) ** 2)
+
+    def closest_pair(self, points: List[Tuple[int, float]], min_date_diff: int = 1) -> float:
+        """Find the closest pair of points considering minimum date difference."""
+
+        def closest_pair_rec(pts):
+            if len(pts) <= 3:
+                distances = []
+                pts_array = np.array(pts)
+                for i in range(len(pts)):
+                    current = pts_array[i]
+                    others = pts_array[i + 1:]
+                    time_diffs = np.abs(others[:, 0] - current[0])
+                    valid_indices = time_diffs >= min_date_diff
+
+                    for point in others[valid_indices]:
+                        distances.append(self.euclidean_distance(current, point))
+
+                return min(distances) if distances else float('inf')
+
+            mid = len(pts) // 2
+            mid_x = pts[mid][0]
+
+            d_left = closest_pair_rec(pts[:mid])
+            d_right = closest_pair_rec(pts[mid:])
+            d = min(d_left, d_right)
+
+            strip = [p for p in pts if abs(p[0] - mid_x) < d]
+            strip.sort(key=lambda p: p[1])
+
+            min_d_strip = float('inf')
+            strip_array = np.array(strip)
+
+            for i in range(len(strip)):
+                current = strip_array[i]
+                end_idx = min(i + 8, len(strip))
+                if i < end_idx:
+                    next_points = strip_array[i + 1:end_idx]
+                    time_diffs = np.abs(next_points[:, 0] - current[0])
+                    valid_indices = time_diffs >= min_date_diff
+
+                    for point in next_points[valid_indices]:
+                        dist = self.euclidean_distance(current, point)
+                        min_d_strip = min(min_d_strip, dist)
+
+            return min(d, min_d_strip)
+
+        if len(points) < 2:
+            return float('inf')
+
+        points = list(set(points))
+        points.sort()
+        return closest_pair_rec(points)
+
+    def find_anomalies(self, df: pd.DataFrame, threshold: Optional[float] = None) -> Tuple[List[Tuple], float]:
+        """Find anomalies in the financial data."""
+        numeric_dates = df['date'].map(self.date_to_numeric).values
+        close_prices = df['close'].values
+        numeric_points = list(zip(numeric_dates, close_prices))
+        min_distance = self.closest_pair(numeric_points, min_date_diff=1)
+
+        if threshold is None:
+            threshold = min_distance * 1.5
+
+        anomalies = []
+        points_array = np.array(numeric_points)
+
+        for i in range(len(points_array)):
+            end_idx = min(i + 8, len(points_array))
+            if i < end_idx:
+                current_point = points_array[i]
+                next_points = points_array[i + 1:end_idx]
+                time_diffs = np.abs(next_points[:, 0] - current_point[0])
+                valid_indices = time_diffs >= 1
+
+                if np.any(valid_indices):
+                    valid_points = next_points[valid_indices]
+                    for point in valid_points:
+                        dist = self.euclidean_distance(current_point, point)
+                        if dist < threshold:
+                            anomalies.append((tuple(current_point), tuple(point), dist))
+
+        return anomalies, min_distance
 
 
-def closest_pair(points, min_date_diff=1):
-    def closest_pair_rec(pts):
-        if len(pts) <= 3:
-            distances = []
-            for i in range(len(pts)):
-                for j in range(i + 1, len(pts)):
-                    # Only calculate distance if points are at least min_date_diff apart
-                    if abs(pts[i][0] - pts[j][0]) >= min_date_diff:
-                        distances.append(euclidean_distance(pts[i], pts[j]))
-            return min(distances) if distances else float('inf')
-
-        mid = len(pts) // 2
-        mid_x = pts[mid][0]
-
-        # Recursive calls for left and right halves
-        d_left = closest_pair_rec(pts[:mid])
-        d_right = closest_pair_rec(pts[mid:])
-
-        d = min(d_left, d_right)
-
-        # Create the strip and sort it by y-coordinate (price)
-        strip = [p for p in pts if abs(p[0] - mid_x) < d]
-        strip.sort(key=lambda p: p[1])
-
-        min_d_strip = float('inf')
-        for i in range(len(strip)):
-            # Only look at a limited window of points ahead
-            j = i + 1
-            while j < len(strip) and j < i + 8:  # Limit to 7 comparisons
-                if abs(strip[i][0] - strip[j][0]) >= min_date_diff:
-                    dist = euclidean_distance(strip[i], strip[j])
-                    min_d_strip = min(min_d_strip, dist)
-                j += 1
-
-        return min(d, min_d_strip)
-
-    if not points:
-        return float('inf')
-
-    # Remove duplicates and sort by date
-    points = list(set(points))
-    points.sort()  # Sort by date (x-coordinate)
-
-    # If we have very few points after removing duplicates
-    if len(points) < 2:
-        return float('inf')
-
-    return closest_pair_rec(points)
+class Visualizer:
+    @staticmethod
+    def generate_report(df: pd.DataFrame, start_idx: int, end_idx: int, title: str = "Stock Analysis Report") -> None:
+        """Generate and display a visual report."""
+        plt.figure(figsize=(10, 6))
+        plt.plot(df['date'], df['close'], label="Stock Price")
+        plt.axvspan(df['date'][start_idx], df['date'][end_idx], color='red', alpha=0.3, label="Max Gain Period")
+        plt.xlabel('Date')
+        plt.ylabel('Price')
+        plt.title(title)
+        plt.legend()
+        plt.show()
 
 
-def find_anomalies(df, threshold=None):
-    # Vectorized conversion of dates to numeric values
-    numeric_dates = df['date'].map(date_to_numeric).values
-    close_prices = df['close'].values
+class StockAnalyzer:
+    def __init__(self):
+        self.data_loader = DataLoader()
+        self.sorter = Sorter()
+        self.trend_analyzer = TrendAnalyzer()
+        self.anomaly_detector = AnomalyDetector()
+        self.visualizer = Visualizer()
 
-    # Create points list using numpy operations
-    numeric_points = list(zip(numeric_dates, close_prices))
+    def analyze_stock_data(self, file_path: str) -> None:
+        """Perform complete stock analysis."""
+        # Load data
+        df = self.data_loader.load_financial_data(file_path)
 
-    # Sort points by date
-    numeric_points.sort()
+        # Sort prices
+        prices = list(df['close'])
+        self.sorter.merge_sort(prices)
 
-    # Find the closest pair distance
-    min_distance = closest_pair(numeric_points, min_date_diff=1)
+        # Analyze trends
+        price_changes = np.diff(df['close'])
+        max_gain, start_idx, end_idx = self.trend_analyzer.max_subarray(price_changes)
+        print(f"Maximum gain: {max_gain}, from {df['date'][start_idx]} to {df['date'][end_idx]}")
 
-    if threshold is None:
-        threshold = min_distance * 1.5
+        # Detect anomalies
+        anomalies, min_distance = self.anomaly_detector.find_anomalies(df)
+        print(f"\nMinimum distance found: {min_distance}")
+        print("Potential anomalies:")
+        for p1, p2, dist in anomalies:
+            date1 = datetime.fromordinal(int(p1[0])).strftime('%Y-%m-%d')
+            date2 = datetime.fromordinal(int(p2[0])).strftime('%Y-%m-%d')
+            print(f"Points: ({date1}, {p1[1]:.2f}) and ({date2}, {p2[1]:.2f}) - Distance: {dist:.2f}")
 
-    # Find anomalies more efficiently
-    anomalies = []
-    points_array = np.array(numeric_points)
-
-    # Use numpy broadcasting for faster distance calculations
-    for i in range(len(points_array)):
-        # Only look at a window of next 7 points to maintain efficiency
-        end_idx = min(i + 8, len(points_array))
-        if i < end_idx:
-            current_point = points_array[i]
-            next_points = points_array[i + 1:end_idx]
-
-            # Calculate time differences
-            time_diffs = np.abs(next_points[:, 0] - current_point[0])
-            valid_indices = time_diffs >= 1
-
-            if np.any(valid_indices):
-                valid_points = next_points[valid_indices]
-                for point in valid_points:
-                    dist = euclidean_distance(current_point, point)
-                    if dist < threshold:
-                        anomalies.append((tuple(current_point), tuple(point), dist))
-
-    return anomalies, min_distance
+        # Visualize results
+        self.visualizer.generate_report(df, start_idx, end_idx,
+                                        title="Period of Maximum Gain in Stock Prices")
 
 
-def generate_report(df, start_idx, end_idx, title="Stock Analysis Report"):
-    plt.figure(figsize=(10,6))
-    plt.plot(df['date'], df['close'], label="Stock Price")
-    plt.axvspan(df['date'][start_idx], df['date'][end_idx], color='red', alpha=0.3, label="Max Gain Period")
-    plt.xlabel('date')
-    plt.ylabel('price')
-    plt.title(title)
-    plt.legend()
-    plt.show()
+if __name__ == "__main__":
+    analyzer = StockAnalyzer()
+    analyzer.analyze_stock_data('SP 500 Stock Prices 2014-2017.csv')
 
+    # Sort Toy example
+    print('\n Toy examples')
+    toy_data = [5, 3, 8, 1, 2]
+    Sorter.merge_sort(toy_data)
+    print(f"Sorted data: {toy_data}")
 
-df = load_financial_data('SP 500 Stock Prices 2014-2017.csv')
-prices = list(df['close'])
-merge_sort(prices)
-# print(prices)
+    # Max gain toy example
+    toy_changes = np.array([3, -2, 5, -1, 6])
+    max_gain, start_idx, end_idx = TrendAnalyzer.max_subarray(toy_changes)
+    print(f"Max Gain: {max_gain}, from index {start_idx} to {end_idx}")
 
-price_changes = np.diff(df['close'])  # Daily price change
-max_gain, start_idx, end_idx = max_subarray(price_changes)
-print(f"Maximum gain: {max_gain}, from {df['date'][start_idx]} to {df['date'][end_idx]}")
+    # Find anomalies toy example
+    sample_df = pd.DataFrame({
+        'date': ['2020-01-01', '2020-01-02', '2020-01-03'],
+        'close': [100, 200, 105]
+    })
+    anomaly_detector = AnomalyDetector()
+    anomalies, min_distance = anomaly_detector.find_anomalies(sample_df)
+    print(f"Anomalies: {anomalies}")
 
-anomalies, min_distance = find_anomalies(df)
-print(f"\nMinimum distance found: {min_distance}")
-print("Potential anomalies:")
-for p1, p2, dist in anomalies:
-    date1 = datetime.fromordinal(int(p1[0])).strftime('%Y-%m-%d')
-    date2 = datetime.fromordinal(int(p2[0])).strftime('%Y-%m-%d')
-    print(f"Points: ({date1}, {p1[1]:.2f}) and ({date2}, {p2[1]:.2f}) - Distance: {dist:.2f}")
+    # Generate Report Toy Example
+    toy_df = pd.DataFrame({
+        'date': ['2020-01-01', '2020-01-02', '2020-01-03'],
+        'close': [100, 200, 105]
+    })
 
-# generate_report(df, start_idx, end_idx, title="Period of Maximum Gain in Stock Prices")
+    price_changes = np.diff(toy_df['close'])
+    max_gain, start_idx, end_idx = TrendAnalyzer.max_subarray(price_changes)
+    Visualizer.generate_report(sample_df, start_idx, end_idx, title="Toy Example: Stock Price Report")
